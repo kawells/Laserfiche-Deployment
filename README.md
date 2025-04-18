@@ -15,7 +15,7 @@ Imports and parses the Laserfiche package manifest file (`package.manifest`) as 
   - Parses the file into a JSON object for easy access.
 - **Example Usage**:
   ```powershell
-  $manifest = Import-LfManifest
+  $manifest = Import-LfManifest -FileRoot "C:\Path To\Extracted Package"
   Write-Output $manifest
   ```
 
@@ -31,7 +31,7 @@ Uninstalls preamble applications (e.g., dependencies or prerequisites) listed in
   - Logs warnings for missing or inaccessible registry paths.
 - **Example Usage**:
   ```powershell
-  Uninstall-LfPreamble
+  Uninstall-LfPreamble -FileRoot "C:\Path To\Extracted Package"
   ```
 
 ---
@@ -46,26 +46,27 @@ Installs prerequisites listed in the Laserfiche package manifest.
   - Logs warnings for failed installations or inaccessible registry keys.
 - **Example Usage**:
   ```powershell
-  Install-LfPrereqs
+  Install-LfPrereqs -FileRoot "C:\Path To\Extracted Package"
   ```
 
 ---
 
-### **4. Install-LfWindowsClient**
-Installs the Laserfiche Repository Desktop Client.
+### **4. Install-LfPackage**
+Installs a Laserfiche Package
 
-- **Purpose**: Automates the installation of the Laserfiche client using the installer file specified in the manifest.
+- **Purpose**: Automates the installation of a Laserfiche clpackageient using the installer file specified in the manifest.
 - **Key Features**:
-  - Executes the installation command via `msiexec` in silent mode.
+  - Executes the installation command via `msiexec` in silent mode for LFMsi packages.
+  - Executes the installation command with -silent -iacceptlicenseagreement -lang en for LFSetup packages.
   - Logs warnings for failed installations.
 - **Example Usage**:
   ```powershell
-  Install-LfWindowsClient
+  Install-LfPackage -FileRoot "C:\Path To\Extracted Package"
   ```
 
 ---
 
-### **5. Uninstall-LfWindowsClient**
+### **5. Uninstall-LfPackage**
 Uninstalls the Laserfiche Repository Desktop Client.
 
 - **Purpose**: Automates the removal of the Laserfiche client using the installer file specified in the manifest.
@@ -74,10 +75,23 @@ Uninstalls the Laserfiche Repository Desktop Client.
   - Logs warnings for failed uninstallations.
 - **Example Usage**:
   ```powershell
-  Uninstall-LfWindowsClient
+  Uninstall-LfPackage -FileRoot "C:\Path To\Extracted Package"
   ```
 
 ---
+
+### **6. Install-LfPackageWithPrereqs**
+Uninstalls the Laserfiche Repository Desktop Client.
+
+- **Purpose**: Automates the installation of a Laserfiche clpackageient using the installer file specified in the manifest, and includes preambles and prereqs.
+- **Key Features**:
+  - Calls Import-LFManifest, Uninstall-LFPreamble, Install-LFPrereqs, Install-LFPackage in succession.
+  - Logs warnings for failed uninstallations.
+- **Example Usage**:
+  ```powershell
+  Install-LfPackageWithPrereqs -FileRoot "C:\Path To\Extracted Package"
+
+  ---
 
 ## **Laserfiche Repository Desktop Client Installation Files**
 The Laserfiche Repository Desktop Client installation files include:
@@ -125,6 +139,7 @@ All functions include robust error handling to:
 
 ## **Contributors**
 - **Kevin Wells**: Author of the custom functions and deployment script.
+- **Jason Dornish**: Added support for file path as an argument.
 
 ---
 

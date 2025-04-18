@@ -14,10 +14,12 @@ function Import-LfManifest {
     $manifest = Import-LfManifest
     Write-Output $manifest
     #>
-
-    # Define the root directory for the manifest file
-    $fileRoot = 'C:\Path\To\Files'
-    $filePath = "$fileRoot\package.manifest"
+    # Import the FileRoot as an argument, with default.
+    param(
+        # FileRoot: path containing the extracted Laserfiche Installer package files
+        [string]$FileRoot='C:\Path\To\Files'
+    )
+    $filePath = "$($FileRoot)\package.manifest"
 
     # Ensure the manifest file exists
     if (-not (Test-Path -Path $filePath)) {
@@ -48,10 +50,16 @@ function Uninstall-LfPreamble {
 
     .EXAMPLE
     Uninstall-LfPreamble
+    Uninstall-LfPreamble -Fileroot 'C:\Path To\Extracted Package'
     #>
+    # Import the FileRoot as an argument, with default.
+    param(
+        # FileRoot: path containing the extracted Laserfiche Installer package files
+        [string]$FileRoot='C:\Path\To\Files'
+    )
 
     # Import the package manifest
-    $packageJson = Import-LfManifest
+    $packageJson = Import-LfManifest -FileRoot $FileRoot
 
     # Define registry paths to search for installed applications
     $registryPaths = @(
@@ -113,11 +121,15 @@ function Install-LfPrereqs {
 
     .EXAMPLE
     Install-LfPrereqs
+    Install-LfPrereqs -FileRoot 'C:\Path To\Extracted Package'
     #>
-    $fileRoot = 'C:\Path\To\Files'
+    param(
+        # FileRoot: path containing the extracted Laserfiche Installer package files
+        [string]$FileRoot='C:\Path\To\Files'
+    )
 
     # Import the package manifest
-    $packageJson = Import-LfManifest
+    $packageJson = Import-LfManifest -FileRoot $FileRoot
 
     # Define the root registry path for checking prerequisites
     $checkRoot = 'HKLM:\'
@@ -131,7 +143,7 @@ function Install-LfPrereqs {
             $keyResult = Get-ItemProperty $checkKey
             if (($null -eq $keyResult) -or ($prereq.CheckValueTarget -gt $keyResult.$($prereq.CheckValue))) {
                 Write-Host "Prerequisite not found: $($prereq.CheckKey)"
-                $installCommand = "$fileRoot\$($prereq.Path) $($prereq.CommandLine)"
+                $installCommand = "$FileRoot\$($prereq.Path) $($prereq.CommandLine)"
                 try {
                     Invoke-Expression $installCommand
                 }
@@ -149,68 +161,158 @@ function Install-LfPrereqs {
     }
 }
 
-function Install-LfWindowsClient {
+function Install-LfPackage {
     <#
     .SYNOPSIS
-    Installs the Laserfiche Windows Client.
+    Installs a Laserfiche Package.
 
     .DESCRIPTION
-    This function installs the Laserfiche Windows Client using the installer
-    file specified in the package manifest.
+    This function installs a generic Laserfiche Package using the installer
+    file specified in the package manifest.  Compatible with either either LFMsi or LFSetup packages.
 
     .EXAMPLE
     Install-LfWindowsClient
+    Install-LfWindowsClient -FileRoot 'C:\Path To\Extracted Package'
     #>
-    $fileRoot = 'C:\Path\To\Files'
+    # Import the FileRoot as an argument, with default.
+    param(
+        # FileRoot: path containing the extracted Laserfiche Installer package files
+        [string]$FileRoot='C:\Path\To\Files'
+    )
 
-    # Import the package manifest
-    $packageJson = Import-LfManifest
+    # Import the package manifest, passing imported FileRoot
+    $packageJson = Import-LfManifest -FileRoot $FileRoot
 
-    # Construct and execute the installation command
-    $installCommand = "msiexec /package `"$fileRoot\$($packageJson.InstallerFile)`" REBOOT=ReallySuppress /QN"
-    Invoke-Expression $installCommand
+    # Determine if the package type is an MSI or a legacy LFSetup
+    # Type: MSI - Uses MSI flags
+    if($packageJSON.PackageType -eq 'LFMsi'){
+        # Construct the installation command
+        Write-Debug "Found Package Type: LFMsi"
+        $installCommand = "msiexec /package `"$FileRoot\$($packageJson.InstallerFile)`" REBOOT=ReallySuppress /QN"
+        
+        # Execute the installation command
+        Write-Debug "Installing via $($installCommand)"
+        Invoke-Expression $installCommand
+    }
+    # Type: Legacy LF Setup - Uses legacy flags based on Unattended Installation
+    elseif($packageJSON.PackageType -eq 'LFSetup'){
+        # Note: INSTALLLEVEL no longer applies here, as only the base program is included in each package
+        # Construct the installation command
+        Write-Debug "Found Package Type: LFSetup"
+        $installCommand = "`"$FileRoot\$($packageJson.InstallerFile)`""
+        $installArguments = " -silent -iacceptlicenseagreement -lang en -log $($env:SystemRoot)\Logs\Software\$($packageJSON.ID)-$($packageJSON.Version).log LANGPACK=en"
+        
+        # Execute the installation command
+        Write-Debug "Installing via $($installCommand) $($installArguments)"
+        Start-Process -FilePath $installCommand -ArgumentList $installArguments -Wait
+    }
+    # Unknown package type, throw an exception
+    else {
+        throw "Cannot Install: Unknown package type '$($packageJSON.PackageType)'.  Known package types are 'LFMsi' and 'LFSetup'."
+    }
 }
 
-function Uninstall-LfWindowsClient {
+
+function Uninstall-LfPackage {
     <#
     .SYNOPSIS
-    Uninstalls the Laserfiche Windows Client.
+    Uninstalls a Laserfiche Package.
 
     .DESCRIPTION
-    This function uninstalls the Laserfiche Windows Client using the installer
+    This function uninstalls a Laserfiche package using the installer
     file specified in the package manifest.
+    Note: Package must by of type LFMsi.
 
     .EXAMPLE
     Uninstall-LfWindowsClient
+    Uninstall-LfWindowsClient -Fileroot 'C:\Path To\Extracted Package'
     #>
-    $fileRoot = 'C:\Path\To\Files'
+    # Import the FileRoot as an argument, with default.
+    param(
+        # FileRoot: path containing the extracted Laserfiche Installer package files
+        [string]$FileRoot='C:\Path\To\Files'
+    )
 
     # Import the package manifest
-    $packageJson = Import-LfManifest
+    $packageJson = Import-LfManifest -FileRoot $FileRoot
 
-    # Construct and execute the uninstallation command
-    $installCommand = "msiexec /uninstall `"$fileRoot\$($packageJson.InstallerFile)`" REBOOT=ReallySuppress /QB!"
-    Invoke-Expression $installCommand
+    # Determine if the package type is an MSI or a legacy LFSetup
+    # Type: MSI - Uses MSI flags
+    if($packageJSON.PackageType -eq 'LFMsi'){
+        # Construct and execute the uninstallation command
+        Write-Debug "Found Package Type: LFMsi"
+        $installCommand = "msiexec /uninstall `"$FileRoot\$($packageJson.InstallerFile)`" REBOOT=ReallySuppress /QB!"
+        # Execute the installation command
+        Invoke-Expression $installCommand
+    }
+    # Unknown package type, throw an exception
+    else {
+        throw "Cannot Uninstall: Not LFMsi package type '$($packageJSON.PackageType)'.  Known package types are 'LFMsi' and 'LFSetup'."
+    }
 }
 
-function Repair-LfWindowsClient {
+function Repair-LfPackage {
     <#
     .SYNOPSIS
-    Repairs the Laserfiche Windows Client.
+    Repairs a Laserfiche Package.
 
     .DESCRIPTION
-    This function repairs the Laserfiche Windows Client using the installer
+    This function repairs a Laserfiche package using the installer
     file specified in the package manifest.
+    Note: Package must by of type LFMsi.
 
     .EXAMPLE
     Repair-LfWindowsClient
+    Repair-LfWindowsClient -Fileroot 'C:\Path To\Extracted Package'
     #>
-    $fileRoot = 'C:\Path\To\Files'
+    # Import the FileRoot as an argument, with default.
+    param(
+        # FileRoot: path containing the extracted Laserfiche Installer package files
+        [string]$FileRoot='C:\Path\To\Files'
+    )
 
     # Import the package manifest
-    $packageJson = Import-LfManifest
+    $packageJson = Import-LfManifest -FileRoot $FileRoot
 
-    # Construct and execute the uninstallation command
-    $installCommand = "msiexec /fa `"$fileRoot\$($packageJson.InstallerFile)`""
-    Invoke-Expression $installCommand
+        # Determine if the package type is an MSI or a legacy LFSetup
+    # Type: MSI - Uses MSI flags
+    if($packageJSON.PackageType -eq 'LFMsi'){
+        # Construct and execute the uninstallation command
+        Write-Debug "Found Package Type: LFMsi"
+        $installCommand = "msiexec /fa `"$FileRoot\$($packageJson.InstallerFile)`""
+        # Execute the repair command
+        Invoke-Expression $installCommand
+    }
+    # Unknown package type, throw an exception
+    else {
+        throw "Cannot Repair: Not LFMsi package type '$($packageJSON.PackageType)'.  Known package types are 'LFMsi' and 'LFSetup'."
+    }
+}
+
+
+function Install-LfPackageWithPrereqs {
+    <#
+    .SYNOPSIS
+    Installs a Laserfiche package, including preambles and prerequisites.
+
+    .DESCRIPTION
+    This function installs a Laserfiche Package using the installer
+    file specified in the package manifest.
+
+    .EXAMPLE
+    Install-LfWindowsClientWithPrereqs
+    Install-LfWindowsClientWithPrereqs -FileRoot 'C:\Path To\Extracted Package'
+    #>
+    # Import the FileRoot as an argument, with default.
+    # Note: Variable named FilePackageRoot due to apparent global conflicts with $FileRoot
+    param(
+        # FilePackageRoot: path containing the extracted Laserfiche Installer package files
+        [Alias("FileRoot")]
+        [string]$FilePackageRoot='C:\Path\To\Files'
+    )
+
+    # Import the package manifest
+    Uninstall-LfPreamble -FileRoot $FilePackageRoot
+    Install-LfPrereqs -FileRoot $FilePackageRoot
+    Install-LFPackage -FileRoot $FilePackageRoot
 }
