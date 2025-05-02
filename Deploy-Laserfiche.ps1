@@ -93,18 +93,19 @@ function Uninstall-LfPreamble {
 
         # If the application is found, uninstall it
         if ($foundApp) {
-            Write-Host "Application found: $($foundApp.DisplayName)"
-            $uninstallCommand = "msiexec.exe /x $productId /qn"
+            Write-Host "Application to Uninstall found: $($foundApp.DisplayName)"
+            $installCommand = "msiexec.exe"
+            $installArguments = "/x $($productId) /qn"
             try {
-                Invoke-Expression $uninstallCommand
-                Write-Host "Uninstall command executed for $($foundApp.DisplayName)"
+                Start-Process $installCommand -ArgumentList $installArguments -Wait
+                Write-Debug "Uninstall command executed for $($foundApp.DisplayName)"
             }
             catch {
                 Write-Warning "Failed to uninstall application: $($foundApp.DisplayName)"
             }
         }
         else {
-            Write-Host "Application with Product ID $productId is not installed."
+            Write-Debug "Application with Product ID $productId is not installed."
         }
     }
 }
@@ -143,16 +144,19 @@ function Install-LfPrereqs {
             $keyResult = Get-ItemProperty $checkKey
             if (($null -eq $keyResult) -or ($prereq.CheckValueTarget -gt $keyResult.$($prereq.CheckValue))) {
                 Write-Host "Prerequisite not found: $($prereq.CheckKey)"
-                $installCommand = "$FileRoot\$($prereq.Path) $($prereq.CommandLine)"
+                # Construct the installation command
+                $installCommand = "$FileRoot\$($prereq.Path)"
+                $installArguments = $($prereq.CommandLine)
+                Write-Debug "Attempting to install prerequisite with command: Start-Process -FilePath $installCommand -ArgumentList $installArguments -Wait"
                 try {
-                    Invoke-Expression $installCommand
+                     Start-Process -FilePath $installCommand -ArgumentList $installArguments -Wait
                 }
                 catch {
                     Write-Warning "Failed to install prerequisite: $($prereq.CheckKey)"
                 }
             }
             else {
-                Write-Host "Prerequisite found: $($prereq.CheckKey)"
+                Write-Debug "Prerequisite found: $($prereq.CheckKey)"
             }
         }
         catch {
@@ -188,11 +192,12 @@ function Install-LfPackage {
     if($packageJSON.PackageType -eq 'LFMsi'){
         # Construct the installation command
         Write-Debug "Found Package Type: LFMsi"
-        $installCommand = "msiexec /package `"$FileRoot\$($packageJson.InstallerFile)`" REBOOT=ReallySuppress /QN"
-        
+        $installCommand = "msiexec.exe"
+        $installArguments = "/package `"$FileRoot\$($packageJson.InstallerFile)`" REBOOT=ReallySuppress /QN"
+
         # Execute the installation command
-        Write-Debug "Installing via $($installCommand)"
-        Invoke-Expression $installCommand
+        Write-Debug "Attempting to install package with command:  Start-Process $installCommand -ArgumentList $installArguments -Wait"
+        Start-Process $installCommand -ArgumentList $installArguments -Wait
     }
     # Type: Legacy LF Setup - Uses legacy flags based on Unattended Installation
     elseif($packageJSON.PackageType -eq 'LFSetup'){
@@ -203,7 +208,7 @@ function Install-LfPackage {
         $installArguments = " -silent -iacceptlicenseagreement -lang en -log $($env:SystemRoot)\Logs\Software\$($packageJSON.ID)-$($packageJSON.Version).log LANGPACK=en"
         
         # Execute the installation command
-        Write-Debug "Installing via $($installCommand) $($installArguments)"
+        Write-Debug "Attempting to install package with command: Start-Process -FilePath $installCommand -ArgumentList $installArguments -Wait"
         Start-Process -FilePath $installCommand -ArgumentList $installArguments -Wait
     }
     # Unknown package type, throw an exception
@@ -241,9 +246,12 @@ function Uninstall-LfPackage {
     if($packageJSON.PackageType -eq 'LFMsi'){
         # Construct and execute the uninstallation command
         Write-Debug "Found Package Type: LFMsi"
-        $installCommand = "msiexec /uninstall `"$FileRoot\$($packageJson.InstallerFile)`" REBOOT=ReallySuppress /QB!"
-        # Execute the installation command
-        Invoke-Expression $installCommand
+        $installCommand = "msiexec.exe"
+        $installArguments = "/uninstall `"$FileRoot\$($packageJson.InstallerFile)`" REBOOT=ReallySuppress /QB!"
+        
+        # Execute the uninstall command
+        Write-Debug "Attempting to uninstall package with command: Start-Process -FilePath $installCommand -ArgumentList $installArguments -Wait"
+        Start-Process -FilePath $installCommand -ArgumentList $installArguments -Wait
     }
     # Unknown package type, throw an exception
     else {
@@ -279,9 +287,13 @@ function Repair-LfPackage {
     if($packageJSON.PackageType -eq 'LFMsi'){
         # Construct and execute the uninstallation command
         Write-Debug "Found Package Type: LFMsi"
-        $installCommand = "msiexec /fa `"$FileRoot\$($packageJson.InstallerFile)`""
+        $installCommand = "msiexec.exe"
+        $installArguments = "$ /fa `"$FileRoot\$($packageJson.InstallerFile)`""
+        
         # Execute the repair command
-        Invoke-Expression $installCommand
+        Write-Debug "Attempting to repair package with command: Start-Process -FilePath $installCommand -ArgumentList $installArguments -Wait"
+        Start-Process -FilePath $installCommand -ArgumentList $installArguments -Wait
+        #Invoke-Expression $installCommand
     }
     # Unknown package type, throw an exception
     else {
