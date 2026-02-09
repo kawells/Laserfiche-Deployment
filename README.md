@@ -1,5 +1,7 @@
 # Laserfiche Deployment Toolkit
 
+This repository is archived since [Laserfiche Installer](https://doc.laserfiche.com/laserfiche.documentation/12/userguide/en-us/content/install-installer.htm) now contains `LFGet.exe` to support unattended installation.
+
 This repository contains a collection of custom PowerShell functions designed to assist with the deployment, installation, and uninstallation of the Laserfiche Repository Desktop Client 12 and its prerequisites.
 
 ---
